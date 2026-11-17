@@ -480,7 +480,7 @@ td{padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;fon
       <!-- ===== PUBLIC RECORDS SEARCH ===== -->
       <div class="view" id="view-pubsearch">
         <div class="help-note">
-          <b>How live data gets here:</b> Your Vercel server fetches bexar.tx.publicsearch.us every 6 hours and saves results to records.json. The Live Feed tab shows those results. Use the quick-launch buttons below to search the county site directly for anything not yet in a scheduled refresh.
+          <b>Public records:</b> Review loaded county filings or use the quick-launch links to search the official county records directly.
         </div>
         <div class="quicklinks">
           <span style="font-size:11px;font-weight:700;color:var(--text2);margin-right:4px">Quick launch:</span>
@@ -524,7 +524,7 @@ td{padding:6px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;fon
             <thead><tr><th>Address</th><th>Owner</th><th>Category</th><th>Doc type</th><th>Filed</th><th>Doc #</th><th>Score</th><th>View</th></tr></thead>
             <tbody id="ps-tbody"></tbody>
           </table>
-          <div id="ps-empty" class="empty">Records from bexar.tx.publicsearch.us will appear here after the first scheduled fetch (every 6 hours via your Vercel server). Use the quick-launch buttons above to search the county site directly now.</div>
+          <div id="ps-empty" class="empty">No records are available for the current filters. Refresh the records or search the official county site using the links above.</div>
         </div>
         <div class="pager">
           <button onclick="psPg(-1)" id="ps-prev">← Prev</button>
@@ -716,8 +716,6 @@ const PS=50, TPS=100;
 let sortCol='score', sortDir=-1;
 let psData = []; // public records data from Vercel JSON
 
-function rnd(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
-function pick(a){return a[Math.floor(Math.random()*a.length)];}
 function fmt$(v){if(!v||v<=0)return '—';return '$'+Math.round(v).toLocaleString();}
 function fmtD(s){if(!s)return '—';try{const d=new Date(s);return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'});}catch{return s;}}
 function fmtShort(s){if(!s)return '—';try{const d=new Date(s);const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return m[d.getMonth()]+' '+d.getDate();}catch{return s;}}
@@ -756,8 +754,8 @@ async function loadLiveData(forceRefresh) {
 
   const url = scrapeURL();
   if (!url) {
-    showNotify('warn', 'Vercel URL not configured. Using demo data.');
-    generateDemoData(); applyF(); applyPS(); return;
+    showNotify('warn', 'County records are temporarily unavailable. Please try again shortly.');
+    clearUnavailableRecords(); return;
   }
 
   showNotify('info', 'Fetching latest records from bexar.tx.publicsearch.us — this takes 30-60 seconds...');
@@ -776,12 +774,12 @@ async function loadLiveData(forceRefresh) {
       const cached = sessionStorage.getItem('bexar_live_data');
       if (cached) {
         applyLiveData(JSON.parse(cached));
-        showNotify('warn', 'Using cached data — could not reach scraper. Click Refresh Now to retry.');
+        showNotify('warn', 'Showing previously retrieved records. Click Refresh Now to update.');
         return;
       }
     } catch(e2) {}
-    showNotify('warn', 'Using demo data. Click Refresh Now once your Vercel scraper is deployed.');
-    generateDemoData(); applyF(); applyPS();
+    showNotify('warn', 'County records are temporarily unavailable. Please try again shortly.');
+    clearUnavailableRecords();
   }
 }
 
@@ -837,72 +835,21 @@ async function loadFCData() {
     filteredFC = [...FC_DATA];
     renderFC();
   } catch(e) {
-    document.getElementById('fc-status').textContent = 'Using demo data';
-    // Generate demo FC data as fallback
-    const attys = ['Linebarger Goggan','Barrett Daffin','McGlinchey Stafford','Buckley Madole'];
-    const streets = ['Oak St','Blanco Rd','Culebra Rd','Bandera Rd','Fredericksburg Rd','Nogalitos St','Zarzamora St','Commerce St','Military Dr','Pleasanton Rd'];
-    for(let i=0;i<42;i++){
-      FC_DATA.push({
-        address: rnd(100,9999)+' '+pick(streets)+', San Antonio TX',
-        type: Math.random()>.4?'Mortgage':'Tax',
-        docNum: 'FC-'+rnd(2024,2025)+'-'+rnd(10000,99999),
-        saleDate: new Date(Date.now()+rnd(5,45)*86400000),
-        amount: rnd(55000,480000),
-        atty: pick(attys)
-      });
-    }
-    filteredFC = [...FC_DATA];
+    document.getElementById('fc-status').textContent = 'Records unavailable';
+    FC_DATA = [];
+    filteredFC = [];
     renderFC();
   }
 }
 
-// ─── DEMO DATA (shown while Vercel not yet deployed) ─────────────────────────
-function generateDemoData() {
-  const streets=['Oak St','Blanco Rd','Culebra Rd','Bandera Rd','Fredericksburg Rd','New Braunfels Ave','Zarzamora St','Commerce St','Hildebrand Ave','Nogalitos St','Pleasanton Rd','Military Dr','Marbach Rd','Huebner Rd','Babcock Rd','Vance Jackson Rd','Perrin Beitel Rd','Nacogdoches Rd','Callaghan Rd','Ingram Rd'];
-  const cities=['San Antonio','San Antonio','San Antonio','San Antonio','Elmendorf','Converse','Universal City','Leon Valley'];
-  const ln=['GARCIA','RODRIGUEZ','MARTINEZ','HERNANDEZ','JOHNSON','WILLIAMS','SMITH','JONES','BROWN','DAVIS','MILLER','WILSON','MOORE','TAYLOR','ANDERSON','GONZALEZ','FLORES','REYES','MORALES','PEREZ'];
-  const fn=['JOSE','MARIA','JUAN','ANA','JAMES','MARY','JOHN','PATRICIA','ROBERT','LINDA','MICHAEL','BARBARA','WILLIAM','RICHARD','CHARLES'];
-  const msMap={
-    foreclosure:['fc'],lien:['multilien','judgment','taxdel'],
-    deed:[],probate:['probate'],
-    lispendens:['lispendens','fc'],court:['bk','divorce']
-  };
-  const docTypes={
-    foreclosure:['Notice of Trustee Sale','Substitute Trustee Notice','Foreclosure Posting','Sheriff Sale Notice'],
-    lien:['Tax Lien','IRS Federal Tax Lien','Mechanic\'s Lien','HOA Assessment Lien','Judgment Lien'],
-    deed:['Warranty Deed','Quitclaim Deed','Special Warranty Deed','Deed of Trust','Transfer on Death Deed'],
-    probate:['Probate Case Filing','Affidavit of Heirship','Letters Testamentary','Will Filed'],
-    lispendens:['Lis Pendens','Notice of Pending Suit'],
-    court:['Bankruptcy Ch. 7','Bankruptcy Ch. 13','Divorce Case Filing','Eviction (FED)','Civil Lawsuit']
-  };
-
+function clearUnavailableRecords() {
   LIVE = [];
-  for(let i=0;i<520;i++){
-    const cat=pick(CATS.filter(c=>c!=='tax'));
-    const dt=docTypes[cat]?pick(docTypes[cat]):'Unknown Doc Type';
-    const addr=rnd(100,9999)+' '+pick(streets);
-    const city=pick(cities);
-    const d=new Date(Date.now()-rnd(0,30)*86400000);
-    const isNew=(Date.now()-d.getTime())<7*86400000;
-    const owner=pick(ln)+' '+pick(fn);
-    const baseFlags=msMap[cat]||[];
-    const extraFlags=[];
-    if(Math.random()>.75) extraFlags.push('absentee');
-    if(Math.random()>.82) extraFlags.push('vacant');
-    if(Math.random()>.85) extraFlags.push('llc');
-    const flags=[...new Set([...baseFlags,...extraFlags])];
-    const score=calcScore(flags);
-    const amt=['foreclosure','lien','lispendens'].includes(cat)?rnd(2000,150000):null;
-    LIVE.push({
-      id:'DEMO-'+i,address:addr,city,zip:'782'+rnd(10,99),owner,
-      category:cat,docType:dt,date:d.toISOString(),
-      amount:amt,score,msFlags:flags,isNew,
-      source:'publicsearch',docNum:'BC-'+rnd(100000,999999)
-    });
-  }
-  psData=[...LIVE];
+  psData = [];
   updateTopStats();
   updateCatCounts();
+  applyF();
+  applyPS();
+  document.getElementById('live-empty').textContent = 'County records are temporarily unavailable. Please try again shortly.';
 }
 
 // ─── FORECLOSURE RENDER ───────────────────────────────────────────────────────
@@ -1697,12 +1644,12 @@ function buildMailList(){
 // ─── REFRESH / TRIGGER SCRAPE ─────────────────────────────────────────────────
 async function triggerScrape(){
   if(!VERCEL_URL){
-    showNotify('warn','Vercel URL not configured.');
+    showNotify('warn','County records are temporarily unavailable. Please try again shortly.');
     return;
   }
   const btn=document.getElementById('refresh-btn');
   btn.textContent='Fetching…';btn.disabled=true;
-  showNotify('info','Scraping bexar.tx.publicsearch.us — please wait 30-60 seconds...');
+  showNotify('info','Refreshing county records — please wait...');
   try{
     const res=await fetch(VERCEL_URL+'/api/scrape?t='+Date.now(),{method:'GET'});
     const data=await res.json();
@@ -1710,12 +1657,12 @@ async function triggerScrape(){
       data._cachedAt=Date.now();
       try{sessionStorage.setItem('bexar_live_data',JSON.stringify(data));}catch(e){}
       applyLiveData(data);
-      showNotify('success',`Scrape complete — ${data.totalRecords||LIVE.length} records fetched from publicsearch.us`);
+      showNotify('success',`Records refreshed — ${data.totalRecords||LIVE.length} records fetched from publicsearch.us`);
     }else{
-      showNotify('warn','Scraper returned no records. The county site may have changed format.');
+      showNotify('warn','No county records were returned. Please try again shortly.');
     }
   }catch(e){
-    showNotify('warn','Could not reach scraper: '+e.message);
+    showNotify('warn','County records are temporarily unavailable. Please try again shortly.');
   }finally{
     btn.textContent='↻ Refresh Now';btn.disabled=false;
   }
